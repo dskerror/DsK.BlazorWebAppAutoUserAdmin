@@ -1,0 +1,178 @@
+﻿@page "/admin/users"
+@using DsK.BlazorWebAppAutoUserAdmin.Data
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+@inject UserManager<ApplicationUser> UserManager
+@inject RoleManager<IdentityRole> RoleManager
+@inject ApplicationDbContext DbContext
+@rendermode InteractiveServer
+
+<h3>Manage Users</h3>
+
+@if (users == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Email</th>
+                <th>Role</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+        @foreach (var user in users)
+        {
+            <tr>
+                <td>@user.User.Email</td>
+                <td>@user.Role</td>
+                <td>
+                    <button @onclick="() => EditUser(user)">Edit</button>
+                    <button @onclick="() => DeleteUser(user.User.Id)">Delete</button>
+                </td>
+            </tr>
+        }
+        </tbody>
+    </table>
+}
+
+<h3>@(isEditMode ? "Edit User" : "Create New User")</h3>
+
+<EditForm Model="@userModel" OnValidSubmit="@HandleValidSubmit" FormName="userForm">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <div class="form-group">
+        <label>Email:</label>
+        <InputText class="form-control" @bind-Value="userModel.Email" />
+    </div>
+    <div class="form-group">
+        <label>Password:</label>
+        <InputText class="form-control" type="password" @bind-Value="userModel.Password" />
+    </div>
+    <div class="form-group">
+        <label>Role:</label>
+        <InputSelect class="form-control" @bind-Value="userModel.Role">
+            <option value="User">User</option>
+            <option value="Admin">Admin</option>
+        </InputSelect>
+    </div>
+    <button type="submit" class="btn btn-primary">@((isEditMode ? "Update User" : "Create User"))</button>
+    <button type="button" class="btn btn-secondary" @onclick="CancelEdit">Cancel</button>
+</EditForm>
+
+@code {
+    private List<UserWithRole> users;
+    private UserModel userModel = new UserModel();
+    private bool isEditMode = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadUsers();
+    }
+
+    private async Task LoadUsers()
+    {
+        var userList = await DbContext.Users.ToListAsync();
+        users = new List<UserWithRole>();
+
+        foreach (var user in userList)
+        {
+            var roles = await UserManager.GetRolesAsync(user);
+            users.Add(new UserWithRole
+            {
+                User = user,
+                Role = roles.FirstOrDefault() ?? "User"
+            });
+        }
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        if (isEditMode)
+        {
+            var user = await UserManager.FindByIdAsync(userModel.Id);
+            if (user != null)
+            {
+                user.Email = userModel.Email;
+                user.UserName = userModel.Email;
+                var result = await UserManager.UpdateAsync(user);
+                if (result.Succeeded)
+                {
+                    var currentRoles = await UserManager.GetRolesAsync(user);
+                    await UserManager.RemoveFromRolesAsync(user, currentRoles);
+
+                    await UserManager.AddToRoleAsync(user, userModel.Role);
+
+                    if (!string.IsNullOrEmpty(userModel.Password))
+                    {
+                        var token = await UserManager.GeneratePasswordResetTokenAsync(user);
+                        await UserManager.ResetPasswordAsync(user, token, userModel.Password);
+                    }
+                    await LoadUsers();
+                    CancelEdit();
+                }
+                else
+                {
+                    // Handle errors
+                }
+            }
+        }
+        else
+        {
+            var user = new ApplicationUser { UserName = userModel.Email, Email = userModel.Email };
+            var result = await UserManager.CreateAsync(user, userModel.Password);
+            if (result.Succeeded)
+            {
+                await UserManager.AddToRoleAsync(user, userModel.Role);
+                await LoadUsers();
+                userModel = new UserModel();
+            }
+            else
+            {
+                // Handle errors
+            }
+        }
+    }
+
+    private void EditUser(UserWithRole user)
+    {
+        userModel.Id = user.User.Id;
+        userModel.Email = user.User.Email;
+        userModel.Role = user.Role;
+        isEditMode = true;
+    }
+
+    private async Task DeleteUser(string userId)
+    {
+        var user = await UserManager.FindByIdAsync(userId);
+        if (user != null)
+        {
+            await UserManager.DeleteAsync(user);
+            await LoadUsers();
+        }
+    }
+
+    private void CancelEdit()
+    {
+        userModel = new UserModel();
+        isEditMode = false;
+    }
+
+    private class UserModel
+    {
+        public string Id { get; set; }
+        public string Email { get; set; }
+        public string Password { get; set; }
+        public string Role { get; set; }
+    }
+
+    private class UserWithRole
+    {
+        public ApplicationUser User { get; set; }
+        public string Role { get; set; }
+    }
+}

@@ -1,0 +1,129 @@
+﻿@page "/admin/roles"
+@using Microsoft.AspNetCore.Identity
+@inject RoleManager<IdentityRole> RoleManager
+@rendermode InteractiveServer
+
+<h3>Role Management</h3>
+
+@if (roles == null)
+{
+    <p><em>Loading...</em></p>
+}
+else
+{
+    <table class="table">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var role in roles)
+            {
+                <tr>
+                    <td>@role.Name</td>
+                    <td>
+                        <button @onclick="() => EditRole(role)">Edit</button>
+                        <button @onclick="() => DeleteRole(role.Id)">Delete</button>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+}
+
+<h3>@(isEditMode ? "Edit Role" : "Create New Role")</h3>
+
+<EditForm Model="@roleModel" OnValidSubmit="@HandleValidSubmit" FormName="CreateEditRoleForm">
+    <DataAnnotationsValidator />
+    <ValidationSummary />
+
+    <div class="form-group">
+        <label>Role Name:</label>
+        <InputText class="form-control" @bind-Value="roleModel.Name" />
+    </div>
+    <button type="submit" class="btn btn-primary">@((isEditMode ? "Update Role" : "Create Role"))</button>
+    <button type="button" class="btn btn-secondary" @onclick="CancelEdit">Cancel</button>
+</EditForm>
+
+@code {
+    private List<IdentityRole> roles;
+    private RoleModel roleModel = new RoleModel();
+    private bool isEditMode = false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadRoles();
+    }
+
+    private async Task LoadRoles()
+    {
+        roles = RoleManager.Roles.ToList();
+    }
+
+    private async Task HandleValidSubmit()
+    {
+        if (isEditMode)
+        {
+            var role = await RoleManager.FindByIdAsync(roleModel.Id);
+            if (role != null)
+            {
+                role.Name = roleModel.Name;
+                var result = await RoleManager.UpdateAsync(role);
+                if (result.Succeeded)
+                {
+                    await LoadRoles();
+                    CancelEdit();
+                }
+                else
+                {
+                    // Handle errors
+                }
+            }
+        }
+        else
+        {
+            var role = new IdentityRole { Name = roleModel.Name };
+            var result = await RoleManager.CreateAsync(role);
+            if (result.Succeeded)
+            {
+                await LoadRoles();
+                roleModel = new RoleModel();
+            }
+            else
+            {
+                // Handle errors
+            }
+        }
+    }
+
+    private void EditRole(IdentityRole role)
+    {
+        roleModel.Id = role.Id;
+        roleModel.Name = role.Name;
+        isEditMode = true;
+    }
+
+    private async Task DeleteRole(string roleId)
+    {
+        var role = await RoleManager.FindByIdAsync(roleId);
+        if (role != null)
+        {
+            await RoleManager.DeleteAsync(role);
+            await LoadRoles();
+        }
+    }
+
+    private void CancelEdit()
+    {
+        roleModel = new RoleModel();
+        isEditMode = false;
+    }
+
+    private class RoleModel
+    {
+        public string Id { get; set; }
+        public string Name { get; set; }
+    }
+}
