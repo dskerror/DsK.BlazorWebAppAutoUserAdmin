@@ -1,6 +1,5 @@
 ﻿@page "/admin/roles"
-@using Microsoft.AspNetCore.Identity
-@inject RoleManager<IdentityRole> RoleManager
+@attribute [Authorize(Roles = "Employee")]
 @rendermode InteractiveServer
 
 <h3>Role Management</h3>

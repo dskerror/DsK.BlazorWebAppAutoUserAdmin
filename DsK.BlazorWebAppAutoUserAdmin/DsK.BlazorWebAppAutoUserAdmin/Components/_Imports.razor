@@ -10,3 +10,12 @@
 @using DsK.BlazorWebAppAutoUserAdmin
 @using DsK.BlazorWebAppAutoUserAdmin.Client
 @using DsK.BlazorWebAppAutoUserAdmin.Components
+@using Microsoft.AspNetCore.Authorization
+@using DsK.BlazorWebAppAutoUserAdmin.Data
+@using Microsoft.AspNetCore.Identity
+@using Microsoft.EntityFrameworkCore
+
+@inject UserManager<ApplicationUser> UserManager
+@inject RoleManager<IdentityRole> RoleManager
+@inject ApplicationDbContext DbContext
+@inject IJSRuntime JSRuntime

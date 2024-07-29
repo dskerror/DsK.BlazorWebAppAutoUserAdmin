@@ -1,4 +1,5 @@
 ﻿@page "/counter"
+@attribute [Authorize(Roles = "Employee, Adjuster")]
 @rendermode InteractiveAuto
 
 <PageTitle>Counter</PageTitle>
