@@ -33,7 +33,13 @@ else
         </tbody>
     </table>
 
+
     <h3>@(isEditMode ? "Edit User" : "Create New User")</h3>
+
+    @if (!string.IsNullOrEmpty(validationError))
+    {
+        <div class="alert alert-danger">@validationError</div>
+    }
 
     <EditForm Model="@userModel" OnValidSubmit="@HandleValidSubmit" FormName="userForm">
         <DataAnnotationsValidator />
@@ -50,6 +56,8 @@ else
         <div class="form-group">
             <label>Role:</label>
             <InputSelect class="form-control" @bind-Value="userModel.Role">
+
+                <option value=""></option>
                 @foreach (var role in roles)
                 {
                     <option value="@role.Name">@role.Name</option>
@@ -59,7 +67,7 @@ else
         <button type="submit" class="btn btn-primary">@((isEditMode ? "Update User" : "Create User"))</button>
         <button type="button" class="btn btn-secondary" @onclick="CancelEdit">Cancel</button>
     </EditForm>
-        
+
     <!-- Delete Confirmation Modal -->
     <div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
         <div class="modal-dialog">
@@ -86,6 +94,7 @@ else
     private bool isEditMode = false;
     private string deleteUserEmail;
     private ApplicationUser deleteUser;
+    private string validationError;
 
     protected override async Task OnInitializedAsync()
     {
@@ -116,6 +125,15 @@ else
 
     private async Task HandleValidSubmit()
     {
+        validationError = string.Empty;
+
+
+        if (string.IsNullOrEmpty(userModel.Role))
+        {
+            validationError = string.Join(", ", "Please select a Role for the User.");
+            return;
+        }
+
         if (isEditMode)
         {
             var user = await UserManager.FindByIdAsync(userModel.Id);
@@ -133,6 +151,13 @@ else
 
                     if (!string.IsNullOrEmpty(userModel.Password))
                     {
+                        var passwordValidationResult = await ValidatePassword(userModel.Password);
+                        if (!passwordValidationResult.Succeeded)
+                        {
+                            validationError = string.Join(", ", passwordValidationResult.Errors.Select(e => e.Description));
+                            return;
+                        }
+
                         var token = await UserManager.GeneratePasswordResetTokenAsync(user);
                         await UserManager.ResetPasswordAsync(user, token, userModel.Password);
                     }
@@ -141,25 +166,53 @@ else
                 }
                 else
                 {
-                    // Handle errors
+                    validationError = string.Join(", ", result.Errors.Select(e => e.Description));
                 }
             }
         }
         else
         {
-            var user = new ApplicationUser { UserName = userModel.Email, Email = userModel.Email };
-            var result = await UserManager.CreateAsync(user, userModel.Password);
-            if (result.Succeeded)
+            if (!string.IsNullOrEmpty(userModel.Password))
             {
-                await UserManager.AddToRoleAsync(user, userModel.Role);
-                await LoadUsers();
-                userModel = new UserModel();
-            }
-            else
+                var passwordValidationResult = await ValidatePassword(userModel.Password);
+                if (!passwordValidationResult.Succeeded)
+                {
+                    validationError = string.Join(", ", passwordValidationResult.Errors.Select(e => e.Description));
+                    return;
+                }
+
+                var user = new ApplicationUser { UserName = userModel.Email, Email = userModel.Email };
+                var result = await UserManager.CreateAsync(user, userModel.Password);
+                if (result.Succeeded)
+                {
+                    await UserManager.AddToRoleAsync(user, userModel.Role);
+                    await LoadUsers();
+                    userModel = new UserModel();
+                }
+                else
+                {
+                    validationError = string.Join(", ", result.Errors.Select(e => e.Description));
+                }
+            } else
             {
-                // Handle errors
+                validationError = string.Join(", ", "Password can't be empty");
             }
         }
+    }
+
+    private async Task<IdentityResult> ValidatePassword(string password)
+    {
+        var user = new ApplicationUser { UserName = userModel.Email, Email = userModel.Email };
+        IdentityResult result = IdentityResult.Success;
+        foreach (var validator in UserManager.PasswordValidators)
+        {
+            result = await validator.ValidateAsync(UserManager, user, password);
+            if (!result.Succeeded)
+            {
+                return result;
+            }
+        }
+        return result;
     }
 
     private void EditUser(UserWithRole user)

@@ -59,9 +59,18 @@ namespace DsK.BlazorWebAppAutoUserAdmin
 
 
             builder.Services.AddSingleton<IEmailSender<ApplicationUser>, IdentityNoOpEmailSender>();
-            ;
+
+            // Add RoleManager and UserManager as services
+            builder.Services.AddScoped<RoleManager<IdentityRole>>();
+            builder.Services.AddScoped<UserManager<ApplicationUser>>();
+
+            // Register the DataSeeder service
+            builder.Services.AddSingleton<DataSeeder>();
 
             var app = builder.Build();
+
+            // Apply migrations at runtime and seed data
+            ApplyMigrationsAndSeedDataAsync(app);
 
             // Configure the HTTP request pipeline.
             if (app.Environment.IsDevelopment())
@@ -92,6 +101,25 @@ namespace DsK.BlazorWebAppAutoUserAdmin
             app.Run();
 
 
+        }
+
+        static async Task ApplyMigrationsAndSeedDataAsync(WebApplication app)
+        {
+            using var scope = app.Services.CreateScope();
+            var services = scope.ServiceProvider;
+            var logger = services.GetRequiredService<ILogger<Program>>();
+
+            try
+            {
+                var context = services.GetRequiredService<ApplicationDbContext>();
+                context.Database.Migrate();
+                var seeder = services.GetRequiredService<DataSeeder>();
+                await seeder.SeedDataAsync();
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "An error occurred while migrating or initializing the database.");
+            }
         }
     }
 }
